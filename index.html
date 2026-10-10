@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Сердце из признаний в любви</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: #05020a;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      background: transparent;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="heartCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('heartCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Фразы «Я тебя люблю» на разных языках
+    const phrases = [
+      "Я тебя люблю", "I love you", "Ich liebe dich", "Je t'aime", 
+      "Ti amo", "Te amo", "Seni seviyorum", "Я тебе кохаю", 
+      "Kocham cię", "Σ' αγαπώ", "Jag älskar dig", "Ik hou van jou", 
+      "Anh yêu em", "Aku cinta kamu", "난 너를 사랑해", "我爱你", 
+      "愛してる", "मै तुमसे प्यार करता हूँ", "ฉันรักเธอ", "Eu te amo"
+    ];
+
+    let width, height, centerX, centerY, scale;
+    let placedWords = [];
+    let currentIndex = 0;
+    let animationFrameId = null;
+
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+      centerX = width / 2;
+      centerY = height / 2;
+      scale = Math.min(width, height) / 38;
+      initHeart();
+    }
+
+    // Математическая формула сердца
+    function getHeartPoint(t) {
+      const x = 16 * Math.pow(Math.sin(t), 3);
+      const y = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+      return { x: x * scale, y: y * scale };
+    }
+
+    // Проверка перекрытия текста (Bounding Box)
+    function isOverlapping(rect1, rect2, padding = 4) {
+      return !(
+        rect1.x + rect1.w + padding < rect2.x ||
+        rect1.x - padding > rect2.x + rect2.w ||
+        rect1.y + rect1.h + padding < rect2.y ||
+        rect1.y - padding > rect2.y + rect2.h
+      );
+    }
+
+    function initHeart() {
+      placedWords = [];
+      currentIndex = 0;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+      // Генерируем точки вдоль контура и внутри сердца
+      let candidatePoints = [];
+
+      // 1. Контур
+      for (let t = 0; t < Math.PI * 2; t += 0.04) {
+        candidatePoints.push(getHeartPoint(t));
+      }
+
+      // 2. Внутренняя область
+      for (let r = 0.15; r < 0.95; r += 0.08) {
+        for (let t = 0; t < Math.PI * 2; t += 0.08) {
+          const pt = getHeartPoint(t);
+          candidatePoints.push({ x: pt.x * r, y: pt.y * r });
+        }
+      }
+
+      // Перемешиваем точки
+      candidatePoints.sort(() => Math.random() - 0.5);
+
+      // Размещаем слова без наложения
+      for (let pt of candidatePoints) {
+        const text = phrases[Math.floor(Math.random() * phrases.length)];
+        const fontSize = Math.floor(11 + Math.random() * 7);
+        ctx.font = `bold ${fontSize}px sans-serif`;
+
+        const textMetrics = ctx.measureText(text);
+        const w = textMetrics.width;
+        const h = fontSize * 1.1;
+
+        const newRect = {
+          x: centerX + pt.x - w / 2,
+          y: centerY + pt.y - h / 2,
+          w: w,
+          h: h,
+          text: text,
+          fontSize: fontSize,
+          colorHue: Math.floor(340 + Math.random() * 30), // Розово-красные оттенки
+          glowPhase: Math.random() * Math.PI * 2,
+          glowSpeed: 0.03 + Math.random() * 0.04,
+          opacity: 0,
+          targetOpacity: 0.85 + Math.random() * 0.15
+        };
+
+        // Проверяем, не перекрывает ли новое слово уже существующие
+        let overlap = false;
+        for (let placed of placedWords) {
+          if (isOverlapping(newRect, placed)) {
+            overlap = true;
+            break;
+          }
+        }
+
+        if (!overlap) {
+          placedWords.push(newRect);
+        }
+      }
+
+      animate();
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, width, height);
+
+      // Постепенное появление слов по очереди
+      if (currentIndex < placedWords.length) {
+        currentIndex += 1.5; 
+      }
+
+      const activeCount = Math.min(placedWords.length, Math.floor(currentIndex));
+
+      for (let i = 0; i < activeCount; i++) {
+        let item = placedWords[i];
+
+        if (item.opacity < item.targetOpacity) {
+          item.opacity += 0.05;
+        }
+
+        item.glowPhase += item.glowSpeed;
+        const pulse = (Math.sin(item.glowPhase) + 1) / 2; 
+        const currentOpacity = Math.min(1, item.opacity * (0.6 + pulse * 0.4));
+
+        ctx.save();
+        ctx.font = `bold ${item.fontSize}px sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+
+        // Эффект свечения
+        ctx.shadowColor = `hsl(${item.colorHue}, 100%, 60%)`;
+        ctx.shadowBlur = 4 + pulse * 8;
+
+        ctx.fillStyle = `hsla(${item.colorHue}, 100%, ${65 + pulse * 25}%, ${currentOpacity})`;
+        ctx.fillText(item.text, item.x, item.y);
+        ctx.restore();
+      }
+
+      animationFrameId = requestAnimationFrame(animate);
+    }
+
+    window.addEventListener('resize', resize);
+    window.addEventListener('load', resize);
+  </script>
+</body>
+</html>
